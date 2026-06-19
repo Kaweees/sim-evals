@@ -1,20 +1,20 @@
-import tyro
 import numpy as np
+import tyro
+from openpi_client import image_tools, websocket_client_policy
 from PIL import Image
-from openpi_client import websocket_client_policy, image_tools
 
 from .abstract_client import InferenceClient
 
+
 class Client(InferenceClient):
-    def __init__(self, 
-                remote_host:str = "localhost", 
-                remote_port:int = 8000,
-                open_loop_horizon:int = 8,
-                 ) -> None:
+    def __init__(
+        self,
+        remote_host: str = "localhost",
+        remote_port: int = 8000,
+        open_loop_horizon: int = 8,
+    ) -> None:
         self.open_loop_horizon = open_loop_horizon
-        self.client = websocket_client_policy.WebsocketClientPolicy(
-            remote_host, remote_port
-        )
+        self.client = websocket_client_policy.WebsocketClientPolicy(remote_host, remote_port)
 
         self.actions_from_chunk_completed = 0
         self.pred_action_chunk = None
@@ -38,18 +38,11 @@ class Client(InferenceClient):
         Infer the next action from the policy in a server-client setup
         """
         curr_obs = self._extract_observation(obs)
-        if (
-            self.actions_from_chunk_completed == 0
-            or self.actions_from_chunk_completed >= self.open_loop_horizon
-        ):
+        if self.actions_from_chunk_completed == 0 or self.actions_from_chunk_completed >= self.open_loop_horizon:
             self.actions_from_chunk_completed = 0
             request_data = {
-                "observation/exterior_image_1_left": image_tools.resize_with_pad(
-                    curr_obs["right_image"], 224, 224
-                ),
-                "observation/wrist_image_left": image_tools.resize_with_pad(
-                    curr_obs["wrist_image"], 224, 224
-                ),
+                "observation/exterior_image_1_left": image_tools.resize_with_pad(curr_obs["right_image"], 224, 224),
+                "observation/wrist_image_left": image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224),
                 "observation/joint_position": curr_obs["joint_position"],
                 "observation/gripper_position": curr_obs["gripper_position"],
                 "prompt": instruction,
@@ -93,8 +86,10 @@ class Client(InferenceClient):
             "gripper_position": gripper_position,
         }
 
+
 if __name__ == "__main__":
     import torch
+
     args = tyro.cli(Args)
     client = Client(args)
     fake_obs = {
@@ -105,7 +100,6 @@ if __name__ == "__main__":
         "policy": {
             "arm_joint_pos": torch.zeros((7,), dtype=torch.float32),
             "gripper_pos": torch.zeros((1,), dtype=torch.float32),
-
         },
     }
     fake_instruction = "pick up the object"
@@ -113,7 +107,7 @@ if __name__ == "__main__":
     import time
 
     start = time.time()
-    client.infer(fake_obs, fake_instruction) # warm up
+    client.infer(fake_obs, fake_instruction)  # warm up
     num = 20
     for i in range(num):
         ret = client.infer(fake_obs, fake_instruction)

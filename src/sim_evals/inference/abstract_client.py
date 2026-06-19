@@ -24,4 +24,3 @@ class InferenceClient(ABC):
         Resets the client to start a new episode.
         """
         pass
-

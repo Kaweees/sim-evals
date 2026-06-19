@@ -1,30 +1,29 @@
-import torch
-import isaaclab.sim as sim_utils
-import isaaclab.envs.mdp as mdp
-import numpy as np
-
-from typing import List
 from pathlib import Path
+
+import numpy as np
+import torch
+
 from pxr import Usd, UsdPhysics
 
+import isaaclab.envs.mdp as mdp
+import isaaclab.sim as sim_utils
+from isaaclab.assets import AssetBaseCfg, RigidObjectCfg
+from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
 from isaaclab.envs.mdp.actions.actions_cfg import BinaryJointPositionActionCfg
 from isaaclab.envs.mdp.actions.binary_joint_actions import BinaryJointPositionAction
-from isaaclab.envs.mdp.actions.joint_actions import JointAction
-from isaaclab.utils import configclass, noise
-from isaaclab.assets import AssetBaseCfg, ArticulationCfg, RigidObjectCfg
-from isaaclab.actuators import ImplicitActuatorCfg
-from isaaclab.managers import SceneEntityCfg
-from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.managers import ObservationGroupCfg as ObsGroup
-from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
-from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import CameraCfg
+from isaaclab.utils import configclass, noise
 
 from .nvidia_droid import NVIDIA_DROID
 
 DATA_PATH = Path(__file__).parent / "../../../assets/"
+
 
 @configclass
 class SceneCfg(InteractiveSceneCfg):
@@ -49,9 +48,7 @@ class SceneCfg(InteractiveSceneCfg):
             horizontal_aperture=5.376,
             vertical_aperture=3.024,
         ),
-        offset=CameraCfg.OffsetCfg(
-            pos=(0.05, 0.57, 0.66), rot=(-0.393, -0.195, 0.399, 0.805), convention="opengl"
-        ),
+        offset=CameraCfg.OffsetCfg(pos=(0.05, 0.57, 0.66), rot=(-0.393, -0.195, 0.399, 0.805), convention="opengl"),
     )
 
     external_cam_2 = CameraCfg(
@@ -65,9 +62,7 @@ class SceneCfg(InteractiveSceneCfg):
             horizontal_aperture=5.376,
             vertical_aperture=3.024,
         ),
-        offset=CameraCfg.OffsetCfg(
-            pos=(0.05, -0.57, 0.66), rot=(0.805, 0.399, -0.195, -0.393), convention="opengl"
-        ),
+        offset=CameraCfg.OffsetCfg(pos=(0.05, -0.57, 0.66), rot=(0.805, 0.399, -0.195, -0.393), convention="opengl"),
     )
 
     wrist_cam = CameraCfg(
@@ -89,16 +84,14 @@ class SceneCfg(InteractiveSceneCfg):
     def dynamic_scene(self, scene_name: str):
         environment_path = DATA_PATH / f"scene{scene_name}.usd"
         scene = AssetBaseCfg(
-                prim_path="{ENV_REGEX_NS}/scene",
-                spawn = sim_utils.UsdFileCfg(
-                    usd_path=str(environment_path),
-                    ),
-                )
+            prim_path="{ENV_REGEX_NS}/scene",
+            spawn=sim_utils.UsdFileCfg(
+                usd_path=str(environment_path),
+            ),
+        )
         self.scene = scene
 
-        stage = Usd.Stage.Open(
-            str(environment_path)
-        )
+        stage = Usd.Stage.Open(str(environment_path))
         scene_prim = stage.GetPrimAtPath("/World")
         children = scene_prim.GetChildren()
 
@@ -113,13 +106,13 @@ class SceneCfg(InteractiveSceneCfg):
             rot = child.GetAttribute("xformOp:orient").Get()
             rot = (rot.GetReal(), rot.GetImaginary()[0], rot.GetImaginary()[1], rot.GetImaginary()[2])
             asset = RigidObjectCfg(
-                        prim_path=f"{{ENV_REGEX_NS}}/scene/{name}",
-                        spawn=None,
-                        init_state=RigidObjectCfg.InitialStateCfg(
-                            pos=pos,
-                            rot=rot,
-                        ),
-                    )
+                prim_path=f"{{ENV_REGEX_NS}}/scene/{name}",
+                spawn=None,
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=pos,
+                    rot=rot,
+                ),
+            )
             setattr(self, name, asset)
 
 
@@ -136,9 +129,7 @@ class BinaryJointPositionZeroToOneAction(BinaryJointPositionAction):
             # true: close, false: open
             binary_mask = actions > 0.5
         # compute the command
-        self._processed_actions = torch.where(
-            binary_mask, self._close_command, self._open_command
-        )
+        self._processed_actions = torch.where(binary_mask, self._close_command, self._open_command)
         if self.cfg.clip is not None:
             self._processed_actions = torch.clamp(
                 self._processed_actions,
@@ -156,6 +147,7 @@ class BinaryJointPositionZeroToOneActionCfg(BinaryJointPositionActionCfg):
 
     class_type = BinaryJointPositionZeroToOneAction
 
+
 @configclass
 class ActionCfg:
     body = mdp.JointPositionActionCfg(
@@ -168,13 +160,12 @@ class ActionCfg:
     finger_joint = BinaryJointPositionZeroToOneActionCfg(
         asset_name="robot",
         joint_names=["finger_joint"],
-        open_command_expr = {"finger_joint": 0.0},
+        open_command_expr={"finger_joint": 0.0},
         close_command_expr={"finger_joint": np.pi / 4},
     )
 
-def arm_joint_pos(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
-):
+
+def arm_joint_pos(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     robot = env.scene[asset_cfg.name]
     joint_names = [
         "panda_joint1",
@@ -186,21 +177,15 @@ def arm_joint_pos(
         "panda_joint7",
     ]
     # get joint inidices
-    joint_indices = [
-        i for i, name in enumerate(robot.data.joint_names) if name in joint_names
-    ]
+    joint_indices = [i for i, name in enumerate(robot.data.joint_names) if name in joint_names]
     joint_pos = robot.data.joint_pos[0, joint_indices]
     return joint_pos
 
 
-def gripper_pos(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
-):
+def gripper_pos(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     robot = env.scene[asset_cfg.name]
     joint_names = ["finger_joint"]
-    joint_indices = [
-        i for i, name in enumerate(robot.data.joint_names) if name in joint_names
-    ]
+    joint_indices = [i for i, name in enumerate(robot.data.joint_names) if name in joint_names]
     joint_pos = robot.data.joint_pos[0, joint_indices]
 
     # rescale
@@ -216,33 +201,31 @@ class ObservationCfg:
         """Observations for policy."""
 
         arm_joint_pos = ObsTerm(func=arm_joint_pos)
-        gripper_pos = ObsTerm(
-            func=gripper_pos, noise=noise.GaussianNoiseCfg(std=0.05), clip=(0, 1)
-        )
+        gripper_pos = ObsTerm(func=gripper_pos, noise=noise.GaussianNoiseCfg(std=0.05), clip=(0, 1))
         external_cam = ObsTerm(
-                func=mdp.observations.image,
-                params={
-                    "sensor_cfg": SceneEntityCfg("external_cam"),
-                    "data_type": "rgb",
-                    "normalize": False,
-                    }
-                )
+            func=mdp.observations.image,
+            params={
+                "sensor_cfg": SceneEntityCfg("external_cam"),
+                "data_type": "rgb",
+                "normalize": False,
+            },
+        )
         external_cam_2 = ObsTerm(
-                func=mdp.observations.image,
-                params={
-                    "sensor_cfg": SceneEntityCfg("external_cam_2"),
-                    "data_type": "rgb",
-                    "normalize": False,
-                    }
-                )
+            func=mdp.observations.image,
+            params={
+                "sensor_cfg": SceneEntityCfg("external_cam_2"),
+                "data_type": "rgb",
+                "normalize": False,
+            },
+        )
         wrist_cam = ObsTerm(
-                func=mdp.observations.image,
-                params={
-                    "sensor_cfg": SceneEntityCfg("wrist_cam"),
-                    "data_type": "rgb",
-                    "normalize": False,
-                    }
-                )
+            func=mdp.observations.image,
+            params={
+                "sensor_cfg": SceneEntityCfg("wrist_cam"),
+                "data_type": "rgb",
+                "normalize": False,
+            },
+        )
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -254,7 +237,9 @@ class ObservationCfg:
 @configclass
 class EventCfg:
     """Configuration for events."""
+
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+
 
 @configclass
 class CommandsCfg:
@@ -265,10 +250,13 @@ class CommandsCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
+
 @configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
+
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
 
 @configclass
 class CurriculumCfg:
@@ -304,8 +292,5 @@ class EnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_collision_stack_size = 2**30
         self.rerender_on_reset = True
 
-    
     def set_scene(self, scene_name: str):
         self.scene.dynamic_scene(scene_name)
-
-
