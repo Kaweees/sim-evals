@@ -1,7 +1,20 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import numpy as np
 import torch
+from isaaclab_newton.physics import (
+    FeatherstoneSolverCfg,
+    KaminoSolverCfg,
+    MJWarpSolverCfg,
+    NewtonCfg,
+    XPBDSolverCfg,
+)
+from isaaclab_newton.renderers import NewtonWarpRendererCfg
+from isaaclab_ov.renderers import OVRTXRendererCfg
+from isaaclab_physx.physics import PhysxCfg
+from isaaclab_physx.renderers import IsaacRtxRendererCfg
 
 from pxr import Usd, UsdPhysics
 
@@ -18,11 +31,19 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import CameraCfg
+from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass, noise
+
+from isaaclab_tasks.utils import PresetCfg
 
 from .nvidia_droid import NVIDIA_DROID
 
 DATA_PATH = Path(__file__).parent / "../../../assets/"
+
+
+##
+# Scene definition
+##
 
 
 @configclass
@@ -116,6 +137,33 @@ class SceneCfg(InteractiveSceneCfg):
             setattr(self, name, asset)
 
 
+##
+# Simulation settings
+##
+
+
+@configclass
+class PhysicsCfg(PresetCfg):
+    """Selectable physics backend (``physics=<name>`` on the CLI)."""
+
+    default = PhysxCfg()
+    physx = PhysxCfg()
+    newton_mjwarp = NewtonCfg(solver_cfg=MJWarpSolverCfg())
+    newton_kamino = NewtonCfg(solver_cfg=KaminoSolverCfg())
+    newton_xpbd = NewtonCfg(solver_cfg=XPBDSolverCfg())
+    newton_featherstone = NewtonCfg(solver_cfg=FeatherstoneSolverCfg())
+
+
+@configclass
+class RendererCfg(PresetCfg):
+    """Selectable render backend (``render=<name>`` on the CLI)."""
+
+    default = IsaacRtxRendererCfg()
+    isaac_rtx = IsaacRtxRendererCfg()
+    newton_renderer = NewtonWarpRendererCfg()
+    ovrtx_renderer = OVRTXRendererCfg()
+
+
 class BinaryJointPositionZeroToOneAction(BinaryJointPositionAction):
     # override
     def process_actions(self, actions: torch.Tensor):
@@ -148,23 +196,6 @@ class BinaryJointPositionZeroToOneActionCfg(BinaryJointPositionActionCfg):
     class_type = BinaryJointPositionZeroToOneAction
 
 
-@configclass
-class ActionCfg:
-    body = mdp.JointPositionActionCfg(
-        asset_name="robot",
-        joint_names=["panda_joint.*"],
-        preserve_order=True,
-        use_default_offset=False,
-    )
-
-    finger_joint = BinaryJointPositionZeroToOneActionCfg(
-        asset_name="robot",
-        joint_names=["finger_joint"],
-        open_command_expr={"finger_joint": 0.0},
-        close_command_expr={"finger_joint": np.pi / 4},
-    )
-
-
 def arm_joint_pos(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
     robot = env.scene[asset_cfg.name]
     joint_names = [
@@ -194,8 +225,15 @@ def gripper_pos(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityC
     return joint_pos
 
 
+##
+# MDP settings
+##
+
+
 @configclass
-class ObservationCfg:
+class ObservationsCfg:
+    """Observation specifications for the MDP."""
+
     @configclass
     class PolicyCfg(ObsGroup):
         """Observations for policy."""
@@ -203,7 +241,7 @@ class ObservationCfg:
         arm_joint_pos = ObsTerm(func=arm_joint_pos)
         gripper_pos = ObsTerm(func=gripper_pos, noise=noise.GaussianNoiseCfg(std=0.05), clip=(0, 1))
         external_cam = ObsTerm(
-            func=mdp.observations.image,
+            func=mdp.image,
             params={
                 "sensor_cfg": SceneEntityCfg("external_cam"),
                 "data_type": "rgb",
@@ -211,7 +249,7 @@ class ObservationCfg:
             },
         )
         external_cam_2 = ObsTerm(
-            func=mdp.observations.image,
+            func=mdp.image,
             params={
                 "sensor_cfg": SceneEntityCfg("external_cam_2"),
                 "data_type": "rgb",
@@ -219,7 +257,7 @@ class ObservationCfg:
             },
         )
         wrist_cam = ObsTerm(
-            func=mdp.observations.image,
+            func=mdp.image,
             params={
                 "sensor_cfg": SceneEntityCfg("wrist_cam"),
                 "data_type": "rgb",
@@ -235,10 +273,22 @@ class ObservationCfg:
 
 
 @configclass
-class EventCfg:
-    """Configuration for events."""
+class ActionsCfg:
+    """Action specifications for the MDP."""
 
-    reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+    body = mdp.JointPositionActionCfg(
+        asset_name="robot",
+        joint_names=["panda_joint.*"],
+        preserve_order=True,
+        use_default_offset=False,
+    )
+
+    finger_joint = BinaryJointPositionZeroToOneActionCfg(
+        asset_name="robot",
+        joint_names=["finger_joint"],
+        open_command_expr={"finger_joint": 0.0},
+        close_command_expr={"finger_joint": np.pi / 4},
+    )
 
 
 @configclass
@@ -259,38 +309,53 @@ class TerminationsCfg:
 
 
 @configclass
+class EventCfg:
+    """Configuration for events."""
+
+    reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+
+
+@configclass
 class CurriculumCfg:
-    """Curriculum configuration."""
+    """Curriculum terms for the MDP."""
+
+
+##
+# Environment configuration
+##
 
 
 @configclass
 class EnvCfg(ManagerBasedRLEnvCfg):
+    """Configuration for the DROID manipulation environment."""
+
+    # Scene settings
     scene = SceneCfg(num_envs=1, env_spacing=7.0)
+    sim: SimulationCfg = SimulationCfg(physics=PhysicsCfg(), render=RendererCfg())
+    # Basic settings
+    observations: ObservationsCfg = ObservationsCfg()
+    actions: ActionsCfg = ActionsCfg()
+    commands: CommandsCfg = CommandsCfg()
+    # MDP settings
+    rewards: RewardsCfg = RewardsCfg()
+    terminations: TerminationsCfg = TerminationsCfg()
+    events: EventCfg = EventCfg()
+    curriculum: CurriculumCfg = CurriculumCfg()
 
-    observations = ObservationCfg()
-    actions = ActionCfg()
-    rewards = RewardsCfg()
-
-    terminations = TerminationsCfg()
-    commands = CommandsCfg()
-    events = EventCfg()
-    curriculum = CurriculumCfg()
-
+    # Post initialization
     def __post_init__(self):
-        self.episode_length_s = 30
+        """Post initialization."""
 
-        self.viewer.eye = (4.5, 0.0, 6.0)
-        self.viewer.lookat = (0.0, 0.0, 0.0)
-
+        # general settings
         self.decimation = 8
+        self.episode_length_s = 30.0
+        # viewer settings
+        self.viewer.eye = (4.5, 0.0, 6.0)
+        self.viewer.env_index = 0
+        self.viewer.lookat = (0.0, 0.0, 0.0)
+        # simulation settings
         self.sim.dt = 1 / (15 * 8)
         self.sim.render_interval = self.decimation
-
-        self.sim.physx.enable_ccd = True
-        self.sim.physx.gpu_temp_buffer_capacity = 2**30
-        self.sim.physx.gpu_heap_capacity = 2**30
-        self.sim.physx.gpu_collision_stack_size = 2**30
-        self.rerender_on_reset = True
 
     def set_scene(self, scene_name: str):
         self.scene.dynamic_scene(scene_name)
