@@ -90,8 +90,7 @@ class Client(InferenceClient):
 if __name__ == "__main__":
     import torch
 
-    args = tyro.cli(Args)
-    client = Client(args)
+    client = tyro.cli(Client)
     fake_obs = {
         "splat": {
             "right_cam": np.zeros((224, 224, 3), dtype=np.uint8),
