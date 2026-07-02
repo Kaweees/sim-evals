@@ -1,6 +1,12 @@
 import gymnasium as gym
-from .droid_environment import EnvCfg as DroidEnvCfg
+
 from isaaclab.envs import ManagerBasedRLEnv
+
+from .droid_environment import EnvCfg as DroidEnvCfg
+
+##
+# Register Gym environments.
+##
 
 gym.register(
     id="DROID",

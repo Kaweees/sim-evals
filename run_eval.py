@@ -28,9 +28,8 @@ import gymnasium as gym
 import mediapy
 import torch
 import tyro
-from tqdm import tqdm
-
 from sim_evals.inference.droid_jointpos import Client as DroidJointPosClient
+from tqdm import tqdm
 
 
 def main(
@@ -52,9 +51,9 @@ def main(
     simulation_app = app_launcher.app
 
     # All IsaacLab dependent modules should be imported after the app is launched
-    from isaaclab_tasks.utils import parse_env_cfg
-
     import sim_evals.environments  # noqa: F401
+
+    from isaaclab_tasks.utils import parse_env_cfg
 
     # Initialize the env
     env_cfg = parse_env_cfg(

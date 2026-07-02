@@ -25,7 +25,7 @@ NVIDIA_DROID = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0, 0, 0),
-        rot=(1, 0, 0, 0),
+        rot=(0, 0, 0, 1),
         joint_pos={
             "panda_joint1": 0.0,
             "panda_joint2": -1 / 5 * np.pi,

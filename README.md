@@ -65,7 +65,7 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpo
 Finally, run the evaluation script:
 
 ```bash
-python run_eval.py --host localhost --port 8000 --episodes [INT] --scene [INT] --headless
+OMNI_KIT_ACCEPT_EULA=yes uv run run_eval.py --host localhost --port 8000 --episodes [INT] --scene [INT] --headless
 ```
 
 ## Minimal Example
