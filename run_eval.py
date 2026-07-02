@@ -37,6 +37,8 @@ def main(
     episodes: int = 10,
     headless: bool = True,
     scene: int = 1,
+    host: str = "localhost",
+    port: int = 8000,
 ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -77,7 +79,7 @@ def main(
 
     obs, _ = env.reset()
     obs, _ = env.reset()  # need second render cycle to get correctly loaded materials
-    client = DroidJointPosClient()
+    client = DroidJointPosClient(remote_host=host, remote_port=port)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
